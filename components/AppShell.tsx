@@ -23,6 +23,12 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               <a className="btn btn-blue inline-block no-underline !text-white" href="/api/kite/login">Log in to Kite ↗</a>
             </div>
           )}
+          {session?.trading && !session.trading.enabled && (
+            <div className={`rounded-lg p-3.5 mb-5 ${TONE.indigo}`}>
+              <div className="font-bold text-sm">Read-only — order placement is off</div>
+              <div className="text-[11.5px] mt-1.5 opacity-90">{session.trading.reason}</div>
+            </div>
+          )}
           {children}
           <p className="text-[11.5px] text-gray-400 dark:text-gray-600 mt-8 leading-relaxed">
             Only strategies that survived out-of-sample validation are offered. Data-driven edges, not guarantees — intraday shorting (and leveraged futures) carries real risk of loss. Not investment advice.

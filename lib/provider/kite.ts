@@ -1,7 +1,22 @@
 // Real Kite Connect provider — talks to https://api.kite.trade directly.
+import { ProxyAgent } from "undici";
 import { DataProvider, Quote, Candle, Holding, Position, Instrument, OrderRequest, OrderResult } from "./types";
+import { orderProxyUrl } from "../trading";
 
 const BASE = "https://api.kite.trade";
+
+// Only ORDER calls are IP-validated by Zerodha, so only they need to egress from a
+// whitelisted static IP. Read calls go direct — cheaper, and keeps the access token
+// off the proxy path for everything except the one endpoint that requires it.
+// Built once per process; undici pools connections behind it.
+let proxyAgent: ProxyAgent | null | undefined;
+function getProxyDispatcher(): ProxyAgent | undefined {
+  if (proxyAgent === undefined) {
+    const url = orderProxyUrl();
+    proxyAgent = url ? new ProxyAgent(url) : null;
+  }
+  return proxyAgent ?? undefined;
+}
 
 // module-level instruments cache (NFO dump is large; refresh daily)
 let instrCache: { day: string; rows: Instrument[] } | null = null;
@@ -123,8 +138,13 @@ export class KiteProvider implements DataProvider {
     if (o.price != null) body.set("price", String(o.price));
     if (o.triggerPrice != null) body.set("trigger_price", String(o.triggerPrice));
     if (o.tag) body.set("tag", o.tag);
+    const dispatcher = getProxyDispatcher();
     const res = await fetch(`${BASE}/orders/${o.variety}`, {
-      method: "POST", headers: { ...this.headers(), "Content-Type": "application/x-www-form-urlencoded" }, body,
+      method: "POST",
+      headers: { ...this.headers(), "Content-Type": "application/x-www-form-urlencoded" },
+      body,
+      // `dispatcher` is an undici extension, not part of the standard fetch types.
+      ...(dispatcher ? ({ dispatcher } as any) : {}),
     });
     const json = await res.json();
     if (json.status === "error") throw new Error(json.message || "Order failed");

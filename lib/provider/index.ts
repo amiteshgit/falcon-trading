@@ -14,8 +14,10 @@ export class NotAuthenticatedError extends Error {
 export async function getProvider(): Promise<DataProvider> {
   const mode = process.env.DATA_PROVIDER || "mock";
   if (mode === "kite") {
-    // browser requests carry the httpOnly cookie; MCP/server requests fall back to the
-    // token saved at login (so Claude can use your live session locally).
+    // Browser requests carry the httpOnly cookie. Server-to-server callers (the local
+    // MCP endpoint) fall back to the token saved at login — but ONLY on a local
+    // runtime. See lib/tokenStore.ts: on a shared serverless host that fallback would
+    // hand the owner's live session to any anonymous visitor on a warm instance.
     const jar = await cookies();
     const at = jar.get(AT_COOKIE)?.value || readStoredToken();
     if (!at) throw new NotAuthenticatedError();

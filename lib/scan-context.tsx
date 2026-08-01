@@ -5,6 +5,7 @@ import { FNO_UNIVERSE, CORE29, SECTORS, conviction } from "@/lib/universe";
 import { fetchQuotes, fetchPriorReturns, placeOrder, fetchSession } from "@/lib/api";
 import type { ScanRow } from "@/lib/strategies";
 import type { OrderRequest } from "@/lib/provider/types";
+import type { SessionInfo } from "@/lib/api";
 import type { PlaceFn, PlaceResult } from "@/components/shared";
 
 export type ScanSet = "fno" | "core";
@@ -18,7 +19,7 @@ interface ModalState {
 }
 
 interface ScanContextValue {
-  session: { live: boolean; authenticated: boolean } | null;
+  session: SessionInfo | null;
   refreshSession: () => Promise<void>;
 
   scanSet: ScanSet;
@@ -51,7 +52,7 @@ const ScanContext = createContext<ScanContextValue | null>(null);
 const CAPITAL_DEFAULT = Number(process.env.NEXT_PUBLIC_CAPITAL || 50000);
 
 export function ScanProvider({ children }: { children: React.ReactNode }) {
-  const [session, setSession] = useState<{ live: boolean; authenticated: boolean } | null>(null);
+  const [session, setSession] = useState<SessionInfo | null>(null);
   const [scanSet, setScanSet] = useState<ScanSet>("fno");
   const [capital, setCapital] = useState(CAPITAL_DEFAULT);
 

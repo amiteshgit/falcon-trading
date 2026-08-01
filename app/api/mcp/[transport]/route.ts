@@ -1,6 +1,11 @@
 // MCP server — exposes the app's data + strategy engine as tools Claude can call.
 // Endpoints: /api/mcp/mcp (Streamable HTTP)  and  /api/mcp/sse
 // Add it in Claude as a custom connector (see README).
+//
+// NOTE: middleware.ts deliberately exempts this path from Basic-Auth (a connector
+// can't answer a browser auth prompt), so on a public deployment this route is the
+// one unauthenticated surface. Set MCP_AUTH_TOKEN to require a bearer token.
+import crypto from "crypto";
 import { createMcpHandler } from "mcp-handler";
 import { z } from "zod";
 import { getProvider } from "@/lib/provider";
@@ -101,4 +106,30 @@ const handler = createMcpHandler(
   { basePath: "/api/mcp" }
 );
 
-export { handler as GET, handler as POST };
+function tokenMatches(got: string, want: string): boolean {
+  const a = Buffer.from(got);
+  const b = Buffer.from(want);
+  // timingSafeEqual throws on length mismatch, so compare lengths first.
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
+// If MCP_AUTH_TOKEN is set, require `Authorization: Bearer <token>`. Unset (the
+// local default) leaves the endpoint open so the connector works with no setup.
+function withAuth<T extends (...args: any[]) => any>(h: T): T {
+  return (async (req: Request, ...rest: any[]) => {
+    const want = process.env.MCP_AUTH_TOKEN;
+    if (want) {
+      const got = req.headers.get("authorization") ?? "";
+      if (!got.startsWith("Bearer ") || !tokenMatches(got.slice(7), want)) {
+        return new Response(JSON.stringify({ error: "unauthorized" }), {
+          status: 401,
+          headers: { "content-type": "application/json" },
+        });
+      }
+    }
+    return h(req, ...rest);
+  }) as unknown as T;
+}
+
+const guarded = withAuth(handler);
+export { guarded as GET, guarded as POST };

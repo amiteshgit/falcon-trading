@@ -94,7 +94,7 @@ components/
 
 ## Notes & next steps
 
-- **Not investment advice.** Edges are modest, backtested, and carry real risk. Order placement sends real orders in live mode — every order has a confirm dialog.
+- **Not investment advice.** Edges are modest, backtested, and carry real risk. Order placement sends real orders in live mode — every order has a confirm dialog, and is additionally gated behind `TRADING_ENABLED` (see the static-IP section).
 - The Backtest tab currently runs the **core-29** set on demand; widen it by passing more symbols to `/api/backtest`.
 - **Real-time streaming**: Kite offers a WebSocket ticker — a natural next upgrade to make quotes self-update instead of on Run Scan.
 - **Options income** (premium-selling / short strangles) is the real F&O edge but needs historical option/IV data to validate — not yet included.
@@ -102,24 +102,56 @@ components/
 
 ---
 
+## The static-IP rule — read this before deploying
+
+Since **2026-04-01**, SEBI's retail-algo rules require Zerodha to validate **order** requests against a static IP registered on your Kite developer profile. The split that matters:
+
+| API surface | IP-validated? | Works on Vercel? |
+|---|---|---|
+| Orders (`/orders/*`) | **Yes** — rejected from unregistered IPs | **No** — serverless egress IPs rotate |
+| Quotes, LTP, historical, holdings, positions, WebSocket | No | **Yes** |
+
+So a Vercel deployment is a fully working **read-only console** — scan, backtest, portfolio, quotes — and order placement is disabled there by default (`TRADING_ENABLED` unset). That default is also a safety property: a public URL can't fire real-money orders because someone found it.
+
+Whitelisting is at **developer-account level** (covers all your apps, not per-app), supports IPv4 and IPv6, and can be **changed only once per calendar week** — so get it right. Set it at [developers.kite.trade](https://developers.kite.trade) → profile → IP Whitelist.
+
+### If you want orders from a deployed app
+
+Route **only order calls** through a static-IP proxy via `KITE_PROXY_URL`, then whitelist that proxy's IP. Read calls still go direct, so your access token only crosses the proxy on the one endpoint that requires it.
+
+| Option | ~Cost/month | Notes |
+|---|---|---|
+| **Own VPS proxy** (Hetzner, or **Oracle Cloud Always Free**) | **₹0–400** | Cheapest, and nobody else handles your order traffic |
+| QuotaGuard Static | ~₹1,600 ($19) | Managed; cheaper tier may terminate TLS |
+| QuotaGuard Shield | ~₹2,450 ($29) | Adds SSL passthrough (no TLS termination) |
+| Vercel Static IPs | ~₹8,400 ($100) | Pro add-on, shared subnet, bandwidth billed on top |
+
+Prefer a proxy that tunnels HTTPS via `CONNECT` rather than terminating TLS — order traffic carries your Kite access token. For a personal account the economics strongly favour a self-hosted proxy: at a ₹50k account size, $19/mo is ~38% of capital per year.
+
+---
+
 ## Deploy to Vercel (step by step)
 
-1. **Push this folder to its own GitHub repo** (e.g. `kite-quant-desk`).
+1. **Push this folder to its own GitHub repo.**
 2. **Vercel → Add New → Project → import the repo.** Framework auto-detects as Next.js; leave build settings default.
-3. **Add Environment Variables** (Project → Settings → Environment Variables). These are encrypted at rest and injected only server-side — they are never in your bundle or repo:
+3. **Add Environment Variables** (Project → Settings → Environment Variables). Encrypted at rest, injected server-side only — never in your bundle or repo:
    - `DATA_PROVIDER = kite`
    - `KITE_API_KEY = <your key>`
-   - `KITE_API_SECRET = <your secret>`  ← used only server-side, in the token exchange
+   - `KITE_API_SECRET = <your secret>` ← server-side only, used in the token exchange
    - `KITE_REDIRECT_URL = https://<your-app>.vercel.app/api/kite/callback`
    - `NEXT_PUBLIC_CAPITAL = 50000`
-   - *(optional privacy)* `BASIC_AUTH_USER` / `BASIC_AUTH_PASS`
+   - `BASIC_AUTH_USER` / `BASIC_AUTH_PASS` ← **set these**, this deployment shows your portfolio
+   - `MCP_AUTH_TOKEN = <long random string>` ← `/api/mcp` is exempt from Basic-Auth (see below)
+   - **Do not set** `TRADING_ENABLED` or `ALLOW_SHARED_TOKEN_STORE` here.
 4. **Deploy.** Note your production URL.
-5. **In your Kite app settings (kite.trade)**, set the **Redirect URL** to `https://<your-app>.vercel.app/api/kite/callback` (must match `KITE_REDIRECT_URL` exactly). Kite allows one redirect URL per app — for local dev either flip it back to `http://127.0.0.1:3000/...` or create a second Kite app.
+5. **In your Kite app settings**, set the **Redirect URL** to `https://<your-app>.vercel.app/api/kite/callback` — it must match `KITE_REDIRECT_URL` exactly. Kite allows one redirect URL per app, so local dev and prod can't both be live; either flip it when needed or create a second Kite app (billed ₹500/mo each).
 6. Open the app → **Log in to Kite** each morning (sessions expire ~7:30 AM IST).
 
-**Why the secrets are safe:** `KITE_API_SECRET` and the access token are used **only in server code** (route handlers / the provider) — never sent to the browser, never `NEXT_PUBLIC_`. The browser only ever holds a short-lived **httpOnly** session cookie it can't read. Keep `.env` out of git (it's git-ignored).
+**Why the secrets are safe:** `KITE_API_SECRET` and the access token are used **only in server code** — never sent to the browser, never `NEXT_PUBLIC_`. The browser holds only a short-lived **httpOnly** cookie it can't read. `.env` is git-ignored.
 
-**Keep the deployment private:** set `BASIC_AUTH_USER` + `BASIC_AUTH_PASS` (a Basic-Auth prompt gates the whole app), or use Vercel's built-in **Deployment Protection** (Project → Settings → Deployment Protection → Password/Vercel Authentication).
+**Keep the deployment private:** set `BASIC_AUTH_USER` + `BASIC_AUTH_PASS`, or use Vercel's **Deployment Protection** (Settings → Deployment Protection). This app exposes live portfolio data — don't skip this.
+
+**Why the token store is local-only:** `lib/tokenStore.ts` caches the access token on disk so the MCP endpoint can share your session. On a shared/serverless host that would be a session-inheritance hole — `/tmp` outlives a request, so an anonymous visitor hitting a warm instance after you logged in would inherit your Kite session. The store therefore disables itself unless the runtime is local. Override with `ALLOW_SHARED_TOKEN_STORE=true` **only** on a single-user box you own.
 
 ---
 
@@ -135,5 +167,5 @@ The app ships an **MCP server** at `app/api/mcp/[transport]/route.ts` exposing t
 
 **Notes:**
 - If Claude requires an `https` connector URL for remote servers, point a tunnel at localhost (e.g. `ngrok http 3000`) and use the `https` URL, or use your Vercel URL.
-- On **Vercel**, the serverless filesystem is ephemeral, so the server-side token store won't persist — the MCP tools there work with **mock** data (great for building/testing strategy logic) or you extend the token store to Vercel KV/Redis for live. Live-data-via-MCP is designed for **local** use.
-- The MCP endpoint is excluded from Basic-Auth so the connector works; keep your local server off the public internet.
+- **Live-data-via-MCP is a local feature.** It relies on the server-side token store, which is deliberately disabled on serverless hosts (see the deploy section). On Vercel the MCP tools serve **mock** data — still useful for building and testing strategy logic.
+- **`/api/mcp` is exempt from Basic-Auth** (a connector can't answer a browser auth prompt), which makes it the one unauthenticated surface on a public deployment. Set `MCP_AUTH_TOKEN` there and send `Authorization: Bearer <token>`; leave it unset locally and the connector works with no setup.

@@ -29,7 +29,12 @@ export async function fetchPriorReturns(symbols: string[]): Promise<{ yret: Reco
 export async function runBacktestApi(body: { symbols?: string[]; gap?: number; stopPct?: number }): Promise<{ result: BacktestResult; provider: string; symbolsTested: number }> {
   return j(await fetch("/api/backtest", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }));
 }
-export async function fetchSession(): Promise<{ live: boolean; authenticated: boolean }> {
+export interface SessionInfo {
+  live: boolean;
+  authenticated: boolean;
+  trading: { enabled: boolean; reason: string };
+}
+export async function fetchSession(): Promise<SessionInfo> {
   return j(await fetch("/api/session"));
 }
 export async function logout(): Promise<{ ok: boolean }> {
