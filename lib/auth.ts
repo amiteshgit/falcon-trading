@@ -1,7 +1,22 @@
 // Kite Connect login helpers (server-only). Access token lives in an httpOnly cookie.
 import crypto from "crypto";
+import { cookies } from "next/headers";
+import { readStoredToken } from "./tokenStore";
 
 export const AT_COOKIE = "kite_at";
+
+/**
+ * The single source of truth for "am I logged in to Kite?".
+ *
+ * Browser requests carry the httpOnly cookie. Local server-to-server callers (the
+ * MCP endpoint) fall back to the token saved at login — local runtimes only, see
+ * lib/tokenStore.ts. Both /api/session and getProvider() must agree on this, or the
+ * UI shows a "log in" banner while live data is already flowing.
+ */
+export async function resolveAccessToken(): Promise<string | null> {
+  const jar = await cookies();
+  return jar.get(AT_COOKIE)?.value || readStoredToken();
+}
 
 export function kiteLoginUrl(): string {
   const key = process.env.KITE_API_KEY;
