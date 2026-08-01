@@ -3,9 +3,10 @@ import { useEffect, useMemo, useState } from "react";
 import { STRATEGIES, candidates, ScanRow } from "@/lib/strategies";
 import { money, fmt, tick } from "@/lib/format";
 import { fetchInstruments, fetchLtp } from "@/lib/api";
+import { useScan } from "@/lib/scan-context";
 import type { OrderRequest, Instrument } from "@/lib/provider/types";
-import { ConvChip, PlaceFn } from "./shared";
-import { Metric } from "./Dashboard";
+import { ConvChip, Metric, TONE } from "./shared";
+import StrategyControls from "./StrategyControls";
 
 interface Resolved {
   none?: boolean;
@@ -42,31 +43,30 @@ async function resolve(row: ScanRow): Promise<Resolved> {
   return { fut: { tradingsymbol: fut.tradingsymbol, lotSize: fut.lotSize, expiry: fut.expiry }, notional, margin: notional * 0.18, opt };
 }
 
-export default function FnoTab({ rows, strat, setStrat, thr, setThr, capital, setCapital, place }: any) {
-  const s = STRATEGIES[strat];
-  const cands = useMemo(() => candidates(rows, s, thr), [rows, strat, thr]);
+export default function FnoScanner() {
+  const { rows, fnoStrat, setFnoStrat, fnoThr, setFnoThr, capital, place } = useScan();
+  const s = STRATEGIES[fnoStrat];
+  const cands = useMemo(() => candidates(rows, s, fnoThr), [rows, s, fnoThr]);
+
   return (
     <div>
-      <div className="flex items-end gap-2.5 flex-wrap">
-        <label className="text-xs text-gray-500 flex flex-col gap-1">Strategy
-          <select className="field min-w-[230px] font-semibold" value={strat} onChange={(e) => { setStrat(e.target.value); setThr(STRATEGIES[e.target.value].thrDefault); }}>
-            {Object.values(STRATEGIES).map((st: any) => <option key={st.id} value={st.id}>{st.label}</option>)}
-          </select>
-        </label>
-        <label className="text-xs text-gray-500 flex flex-col gap-1">{s.thrLabel}<input className="field w-20" type="number" step={0.25} value={thr} onChange={(e) => setThr(parseFloat(e.target.value) || s.thrDefault)} /></label>
-        <label className="text-xs text-gray-500 flex flex-col gap-1">Capital ₹<input className="field w-28" type="number" step={10000} value={capital} onChange={(e) => setCapital(parseFloat(e.target.value) || 50000)} /></label>
+      <StrategyControls strat={fnoStrat} setStrat={setFnoStrat} thr={fnoThr} setThr={setFnoThr} />
+      <div className={`rounded-lg px-3 py-2 text-xs my-3 ${TONE.red}`}>
+        <b>Capital reality:</b> one lot of a stock future needs ~₹70k–₹1.8L margin — more than your set capital ({money(capital)}). At this capital, buy the <b>PUT</b> instead (defined risk, affordable). Raise capital in the profile menu if you&apos;re funded for futures.
       </div>
-      <div className="bg-red-50 border border-red-200 text-red-800 rounded-lg px-3 py-2 text-xs my-3">
-        <b>Capital reality:</b> one lot of a stock future needs ~₹70k–₹1.8L margin — more than ₹50,000. At this capital, buy the <b>PUT</b> instead (defined risk, affordable). Raise Capital if you're funded for futures.
-      </div>
-      <div className="text-[13px] font-bold uppercase tracking-wide text-gray-500 mb-2.5">F&O short candidates — {s.label}</div>
-      {cands.length === 0 ? <p className="text-gray-500 text-sm">No candidate reached the {thr}% {s.thrLabel.toLowerCase()} today.</p> :
-        <div className="grid gap-3.5 md:grid-cols-2">{cands.map((r: ScanRow) => <FnoCard key={r.symbol} r={r} strat={s} capital={capital} place={place} />)}</div>}
+      <div className="sect !mt-4">F&amp;O short candidates — {s.label}</div>
+      {cands.length === 0 ? (
+        <p className="text-gray-500 dark:text-gray-400 text-sm">No candidate reached the {fnoThr}% {s.thrLabel.toLowerCase()} today.</p>
+      ) : (
+        <div className="grid gap-3.5 md:grid-cols-2">
+          {cands.map((r) => <FnoCard key={r.symbol} r={r} strat={s} capital={capital} place={place} />)}
+        </div>
+      )}
     </div>
   );
 }
 
-function FnoCard({ r, strat, capital, place }: { r: ScanRow; strat: any; capital: number; place: PlaceFn }) {
+function FnoCard({ r, strat, capital, place }: { r: ScanRow; strat: any; capital: number; place: any }) {
   const [res, setRes] = useState<Resolved | null>(null);
   const [result, setResult] = useState<string | null>(null);
   useEffect(() => { let on = true; resolve(r).then((x) => on && setRes(x)).catch(() => on && setRes({ none: true })); return () => { on = false; }; }, [r.symbol]);
@@ -92,29 +92,31 @@ function FnoCard({ r, strat, capital, place }: { r: ScanRow; strat: any; capital
   return (
     <div className="card border-l-4 border-l-red-600">
       <div className="flex items-baseline justify-between">
-        <div><span className="text-base font-bold">{r.symbol}</span> <span className="text-[11px] text-gray-500">{r.sector}</span>
-          <span className="chip bg-red-50 text-red-700 border border-red-200 ml-1.5">SHORT FUT</span> <ConvChip c={r.conv} /></div>
-        <div className="text-[15px] font-bold text-red-600">{strat.sigText(strat.signal(r))}</div>
+        <div>
+          <span className="text-base font-bold">{r.symbol}</span> <span className="text-[11px] text-gray-500 dark:text-gray-400">{r.sector}</span>
+          <span className={`chip ml-1.5 ${TONE.red}`}>SHORT FUT</span> <ConvChip c={r.conv} />
+        </div>
+        <div className="text-[15px] font-bold text-red-600 dark:text-red-400">{strat.sigText(strat.signal(r))}</div>
       </div>
-      {!res ? <div className="text-[11.5px] text-gray-400 my-3">Resolving contract…</div> : res.none ? <div className="text-[11.5px] text-gray-400 my-3">No listed derivative found.</div> : (<>
+      {!res ? <div className="text-[11.5px] text-gray-400 dark:text-gray-600 my-3">Resolving contract…</div> : res.none ? <div className="text-[11.5px] text-gray-400 dark:text-gray-600 my-3">No listed derivative found.</div> : (<>
         <div className="grid grid-cols-3 gap-2 my-3">
-          <Metric k="Future" v={res.fut!.tradingsymbol} /><Metric k="Lot" v={String(res.fut!.lotSize)} /><Metric k={`Stop ${strat.stopPct}%`} v={fmt(stop)} cls="text-red-600" />
-          <Metric k="1-lot notional" v={money(res.notional!)} /><Metric k="Est. margin/lot" v={money(res.margin!)} /><Metric k="Lots you can take" v={String(lots)} cls={lots >= 1 ? "text-emerald-600" : "text-red-600"} />
+          <Metric k="Future" v={res.fut!.tradingsymbol} /><Metric k="Lot" v={String(res.fut!.lotSize)} /><Metric k={`Stop ${strat.stopPct}%`} v={fmt(stop)} cls="text-red-600 dark:text-red-400" />
+          <Metric k="1-lot notional" v={money(res.notional!)} /><Metric k="Est. margin/lot" v={money(res.margin!)} /><Metric k="Lots you can take" v={String(lots)} cls={lots >= 1 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"} />
         </div>
         {lots >= 1 ? <button className="btn w-full mb-2" onClick={shortFuture}>Short {lots} lot{lots > 1 ? "s" : ""} (Futures CO)</button>
-          : <button className="btn w-full mb-2 !bg-gray-200 !text-gray-400" disabled>Needs {money(res.margin!)} margin — above capital</button>}
+          : <button className="btn w-full mb-2 !bg-gray-200 dark:!bg-gray-800 !text-gray-400 dark:!text-gray-600" disabled>Needs {money(res.margin!)} margin — above capital</button>}
         {res.opt && (
-          <div className="bg-violet-50 border border-violet-200 rounded-lg px-3 py-2.5 mt-1">
+          <div className={`rounded-lg px-3 py-2.5 mt-1 ${TONE.violet}`}>
             <div className="text-xs font-semibold mb-1">Options — {res.opt.expiry} · ATM {res.opt.atm}</div>
-            <div className="text-[11.5px] text-gray-600">PUT {res.opt.pe || "—"} ≈ ₹{res.opt.pePx != null ? fmt(res.opt.pePx) : "—"} · CALL {res.opt.ce || "—"} ≈ ₹{res.opt.cePx != null ? fmt(res.opt.cePx) : "—"}</div>
+            <div className="text-[11.5px] opacity-90">PUT {res.opt.pe || "—"} ≈ ₹{res.opt.pePx != null ? fmt(res.opt.pePx) : "—"} · CALL {res.opt.ce || "—"} ≈ ₹{res.opt.cePx != null ? fmt(res.opt.cePx) : "—"}</div>
             {res.opt.pePx != null && <>
-              <div className="text-[11.5px] text-gray-600 my-1.5">Affordable short: <b>buy 1 lot PUT</b> ≈ {money(res.opt.pePx * res.opt.lot)} — max loss = premium.</div>
+              <div className="text-[11.5px] opacity-90 my-1.5">Affordable short: <b>buy 1 lot PUT</b> ≈ {money(res.opt.pePx * res.opt.lot)} — max loss = premium.</div>
               <button className="btn btn-violet w-full" onClick={buyPut}>Buy 1 lot PUT (~{money(res.opt.pePx * res.opt.lot)})</button>
             </>}
           </div>
         )}
       </>)}
-      {result && <div className="mt-2.5 rounded-lg px-3 py-2 text-[12.5px] bg-emerald-50 border border-emerald-200 text-emerald-800">{result}</div>}
+      {result && <div className={`mt-2.5 rounded-lg px-3 py-2 text-[12.5px] ${TONE.emerald}`}>{result}</div>}
     </div>
   );
 }

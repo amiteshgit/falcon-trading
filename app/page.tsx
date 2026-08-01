@@ -1,9 +1,13 @@
-import Dashboard from "@/components/Dashboard";
+import EquityScanner from "@/components/EquityScanner";
+import ScanBar from "@/components/ScanBar";
+import { PageHeader } from "@/components/shared";
 
 export default function Page() {
   return (
-    <main className="max-w-5xl mx-auto px-4 py-5">
-      <Dashboard />
-    </main>
+    <div>
+      <PageHeader title="Equity Scanner" subtitle="Validated NSE cash-market fade strategies" />
+      <ScanBar />
+      <EquityScanner />
+    </div>
   );
 }

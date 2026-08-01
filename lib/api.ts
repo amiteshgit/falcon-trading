@@ -32,3 +32,6 @@ export async function runBacktestApi(body: { symbols?: string[]; gap?: number; s
 export async function fetchSession(): Promise<{ live: boolean; authenticated: boolean }> {
   return j(await fetch("/api/session"));
 }
+export async function logout(): Promise<{ ok: boolean }> {
+  return j(await fetch("/api/session", { method: "DELETE" }));
+}

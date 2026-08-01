@@ -38,13 +38,22 @@ That's it — every screen now uses your real account. No code changes; the prov
 
 ## Architecture
 
+The app is a real multi-route Next.js app: a persistent shell (sidebar + header) wraps four routed pages, with shared scan/session/capital state lifted into a context so pages stay in sync without prop-drilling.
+
 ```
 app/
-  page.tsx                → renders <Dashboard/>
+  layout.tsx              → <html>, theme/hydration setup, wraps <Providers>
+  providers.tsx           → ThemeProvider (next-themes) + ScanProvider + <AppShell>
+  page.tsx                → Equity Scanner route (/)
+  fno/page.tsx             → F&O route (/fno)
+  portfolio/page.tsx       → Portfolio route (/portfolio)
+  backtest/page.tsx        → Backtest route (/backtest)
   api/
     quotes, ltp, historical, holdings, instruments, order, prior-returns, backtest, session
     kite/login, kite/callback     → Kite OAuth flow
 lib/
+  scan-context.tsx         → ScanProvider/useScan() — session, scan universe, capital,
+                              per-tab strategy/threshold, scanned rows, order-confirm modal
   provider/
     types.ts              → DataProvider interface + shared types
     mock.ts               → sample-data provider (default)
@@ -56,12 +65,19 @@ lib/
   backtest.ts             → gap-fade backtest engine (train/test split)
   format.ts, api.ts       → helpers + client fetch wrappers
 components/
-  Dashboard.tsx           → orchestrator + Equity / Portfolio / Backtest tabs + order modal
-  FnoTab.tsx              → F&O futures + live options (buy-put)
-  shared.tsx              → conviction chips, shared types
+  AppShell.tsx             → sidebar + header + login banner + order modal, wraps every route
+  Sidebar.tsx, TopHeader.tsx → nav, page title, provider badge
+  ProfileMenu.tsx           → Kite session status, login/logout, position-sizing capital
+  ThemeToggle.tsx            → light/dark switch (next-themes)
+  ScanBar.tsx, StrategyControls.tsx → shared scan-universe / strategy controls (Equity + F&O)
+  OrderModal.tsx             → order-confirm dialog, driven by ScanProvider
+  EquityScanner.tsx, FnoScanner.tsx, PortfolioView.tsx, BacktestView.tsx → per-route content
+  shared.tsx                 → conviction chips, tone/color helpers, Metric/Stat/PageHeader
 ```
 
 **The one seam that matters:** every data call goes through the `DataProvider` interface. `MockProvider` and `KiteProvider` implement it identically, so the UI never knows which is behind it. To add a new broker or data source, implement the interface and wire it into `getProvider()`.
+
+**Theme:** class-based dark mode (Tailwind `darkMode: "class"` + `next-themes`), defaults to the OS preference; the header toggle persists the choice to `localStorage`.
 
 ---
 

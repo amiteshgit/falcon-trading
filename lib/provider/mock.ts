@@ -66,11 +66,17 @@ export class MockProvider implements DataProvider {
     // synth daily candles (random walk) between the dates
     const start = new Date(from), end = new Date(to);
     const rnd = seeded("hist" + token);
-    let price = 100 + rnd() * 1500;
+    let close = 100 + rnd() * 1500;
     const out: Candle[] = [];
     for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
       const wd = d.getDay(); if (wd === 0 || wd === 6) continue;
-      const o = price;
+      // overnight gap from prior close; ~6% of days gap up big enough to be a fade candidate
+      const roll = rnd();
+      let gapPct: number;
+      if (roll > 0.94) gapPct = 2 + rnd() * 3;          // big gap up
+      else if (roll > 0.88) gapPct = -(2 + rnd() * 3);  // big gap down
+      else gapPct = (rnd() - 0.5) * 1.6;                // normal ±0.8%
+      const o = close * (1 + gapPct / 100);
       const ch = (rnd() - 0.5) * 0.03;
       const c = o * (1 + ch);
       out.push({
@@ -79,7 +85,7 @@ export class MockProvider implements DataProvider {
         low: +(Math.min(o, c) * (1 - rnd() * 0.01)).toFixed(2), close: +c.toFixed(2),
         volume: Math.round(1e5 + rnd() * 5e6),
       });
-      price = c;
+      close = c;
     }
     return out;
   }
