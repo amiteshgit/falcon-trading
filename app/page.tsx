@@ -1,13 +1,19 @@
-import EquityScanner from "@/components/EquityScanner";
+import ScannerView from "@/components/ScannerView";
 import ScanBar from "@/components/ScanBar";
 import { PageHeader } from "@/components/shared";
 
 export default function Page() {
   return (
     <div>
-      <PageHeader title="Equity Scanner" subtitle="Validated NSE cash-market fade strategies" />
+      <PageHeader
+        title="Intraday"
+        subtitle="Validated same-day fades — entered in the morning, closed at the bell."
+      />
       <ScanBar />
-      <EquityScanner />
+      <ScannerView
+        horizon="intraday"
+        emptyNote="No intraday strategies registered."
+      />
     </div>
   );
 }

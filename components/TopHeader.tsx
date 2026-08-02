@@ -6,8 +6,10 @@ import ProfileMenu from "./ProfileMenu";
 import { useScan } from "@/lib/scan-context";
 
 const TITLES: Record<string, string> = {
-  "/": "Scanner",
-  "/fno": "F&O",
+  "/": "Intraday",
+  "/swing": "Swing",
+  "/options": "Options & F&O",
+  "/risk": "Risk & Allocation",
   "/portfolio": "Portfolio",
   "/backtest": "Backtest",
 };

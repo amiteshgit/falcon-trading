@@ -6,7 +6,7 @@ import { fetchInstruments, fetchLtp } from "@/lib/api";
 import { useScan } from "@/lib/scan-context";
 import type { OrderRequest, Instrument } from "@/lib/provider/types";
 import { ConvChip, Metric, TONE } from "./shared";
-import StrategyControls from "./StrategyControls";
+import StrategyPicker from "./StrategyPicker";
 
 interface Resolved {
   none?: boolean;
@@ -50,7 +50,7 @@ export default function FnoScanner() {
 
   return (
     <div>
-      <StrategyControls strat={fnoStrat} setStrat={setFnoStrat} thr={fnoThr} setThr={setFnoThr} />
+      <StrategyPicker strategies={STRATEGIES} value={fnoStrat} onChange={setFnoStrat} thr={fnoThr} setThr={setFnoThr} />
       <div className={`rounded-lg px-3 py-2 text-xs my-3 ${TONE.red}`}>
         <b>Capital reality:</b> one lot of a stock future needs ~₹70k–₹1.8L margin — more than your set capital ({money(capital)}). At this capital, buy the <b>PUT</b> instead (defined risk, affordable). Raise capital in the profile menu if you&apos;re funded for futures.
       </div>

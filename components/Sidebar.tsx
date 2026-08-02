@@ -1,11 +1,13 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LineChart, CandlestickChart, Briefcase, FlaskConical, X } from "lucide-react";
+import { Zap, CalendarRange, CandlestickChart, ShieldCheck, Briefcase, FlaskConical, X } from "lucide-react";
 
 const NAV = [
-  { href: "/", label: "Scanner", sub: "Equity (cash)", icon: LineChart },
-  { href: "/fno", label: "F&O", sub: "Futures & options", icon: CandlestickChart },
+  { href: "/", label: "Intraday", sub: "Same-day fades", icon: Zap },
+  { href: "/swing", label: "Swing", sub: "2–5 day holds", icon: CalendarRange },
+  { href: "/options", label: "Options & F&O", sub: "Futures & options", icon: CandlestickChart },
+  { href: "/risk", label: "Risk & Allocation", sub: "Capital per bucket", icon: ShieldCheck },
   { href: "/portfolio", label: "Portfolio", sub: "Holdings & positions", icon: Briefcase },
   { href: "/backtest", label: "Backtest", sub: "Train/test validation", icon: FlaskConical },
 ];
