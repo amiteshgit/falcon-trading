@@ -1,8 +1,8 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { LogIn, LogOut, Wallet, ChevronDown } from "lucide-react";
+import { LogIn, LogOut, Wallet, ChevronDown, DoorOpen } from "lucide-react";
 import { useScan } from "@/lib/scan-context";
-import { logout } from "@/lib/api";
+import { logout, signOutApp } from "@/lib/api";
 import { money } from "@/lib/format";
 
 export default function ProfileMenu() {
@@ -25,6 +25,12 @@ export default function ProfileMenu() {
     await logout().catch(() => {});
     await refreshSession();
     setOpen(false);
+  }
+
+  async function doSignOut() {
+    await signOutApp().catch(() => {});
+    // Full navigation so the middleware re-runs and lands on /login.
+    window.location.href = "/login";
   }
 
   const authenticated = !session?.live || session?.authenticated;
@@ -88,6 +94,16 @@ export default function ProfileMenu() {
                 Set DATA_PROVIDER=kite to go live
               </div>
             )}
+          </div>
+
+          <div className="p-2 pt-0">
+            <button
+              onClick={doSignOut}
+              className="w-full rounded-lg px-4 py-2 text-[12.5px] font-medium flex items-center justify-center gap-1.5
+                text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-[#1B2130] transition"
+            >
+              <DoorOpen size={13} /> Sign out of Falcon
+            </button>
           </div>
         </div>
       )}

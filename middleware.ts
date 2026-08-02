@@ -1,26 +1,37 @@
 import { NextRequest, NextResponse } from "next/server";
+import { authEnabled, verifySessionToken, SESSION_COOKIE } from "@/lib/app-auth";
 
-// Optional Basic-Auth gate so a public Vercel deployment isn't wide open.
-// ENABLE by setting BASIC_AUTH_USER and BASIC_AUTH_PASS in your env. If unset, it's a no-op.
-// (Excludes the Kite OAuth callback and the MCP endpoint so those keep working.)
-export function middleware(req: NextRequest) {
-  const user = process.env.BASIC_AUTH_USER;
-  const pass = process.env.BASIC_AUTH_PASS;
-  if (!user || !pass) return NextResponse.next(); // disabled
+// Gates the whole app behind a login page so a public deployment isn't wide open.
+// ENABLE by setting APP_USER + APP_PASSWORD (or the legacy BASIC_AUTH_USER/PASS).
+// If unset, it's a no-op and everything is reachable — fine for local dev.
+//
+// Unauthenticated browsers are REDIRECTED to /login (a real page). API calls get a
+// 401 JSON body instead, so a fetch never receives an HTML login page it can't parse.
+export async function middleware(req: NextRequest) {
+  if (!authEnabled()) return NextResponse.next();
 
-  const header = req.headers.get("authorization");
-  if (header?.startsWith("Basic ")) {
-    const decoded = atob(header.slice(6));
-    const i = decoded.indexOf(":");
-    if (decoded.slice(0, i) === user && decoded.slice(i + 1) === pass) return NextResponse.next();
+  const token = req.cookies.get(SESSION_COOKIE)?.value;
+  if (await verifySessionToken(token)) return NextResponse.next();
+
+  const { pathname, search } = req.nextUrl;
+
+  if (pathname.startsWith("/api/")) {
+    return NextResponse.json({ error: "not_signed_in" }, { status: 401 });
   }
-  return new NextResponse("Authentication required", {
-    status: 401,
-    headers: { "WWW-Authenticate": 'Basic realm="falcon-trading"' },
-  });
+
+  const url = req.nextUrl.clone();
+  url.pathname = "/login";
+  url.search = "";
+  // Preserve where they were headed so login can send them back.
+  if (pathname !== "/") url.searchParams.set("next", pathname + search);
+  return NextResponse.redirect(url);
 }
 
-// protect everything except static assets, the OAuth callback, and the MCP endpoint
+// Protect everything except static assets, the login page and its endpoint, the
+// Kite OAuth callback (Zerodha redirects here), and the MCP endpoint (a connector
+// can't complete a browser login — it authenticates with MCP_AUTH_TOKEN instead).
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|api/kite|api/mcp).*)"],
+  matcher: [
+    "/((?!_next/static|_next/image|favicon.ico|login|api/login|api/kite|api/mcp).*)",
+  ],
 };

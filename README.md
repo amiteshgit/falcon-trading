@@ -140,7 +140,7 @@ Prefer a proxy that tunnels HTTPS via `CONNECT` rather than terminating TLS — 
    - `KITE_API_SECRET = <your secret>` ← server-side only, used in the token exchange
    - `KITE_REDIRECT_URL = https://<your-app>.vercel.app/api/kite/callback`
    - `NEXT_PUBLIC_CAPITAL = 50000`
-   - `BASIC_AUTH_USER` / `BASIC_AUTH_PASS` ← **set these**, this deployment shows your portfolio
+   - `APP_USER` / `APP_PASSWORD` ← **set these**, this deployment shows your portfolio
    - `MCP_AUTH_TOKEN = <long random string>` ← `/api/mcp` is exempt from Basic-Auth (see below)
    - **Do not set** `TRADING_ENABLED` or `ALLOW_SHARED_TOKEN_STORE` here.
 4. **Deploy.** Note your production URL.
@@ -149,7 +149,9 @@ Prefer a proxy that tunnels HTTPS via `CONNECT` rather than terminating TLS — 
 
 **Why the secrets are safe:** `KITE_API_SECRET` and the access token are used **only in server code** — never sent to the browser, never `NEXT_PUBLIC_`. The browser holds only a short-lived **httpOnly** cookie it can't read. `.env` is git-ignored.
 
-**Keep the deployment private:** set `BASIC_AUTH_USER` + `BASIC_AUTH_PASS`, or use Vercel's **Deployment Protection** (Settings → Deployment Protection). This app exposes live portfolio data — don't skip this.
+**Keep the deployment private:** set `APP_USER` + `APP_PASSWORD`. Unauthenticated visitors are redirected to a `/login` page; a signed, httpOnly session cookie (HMAC-SHA256, 7-day expiry) keeps them in. API routes return `401 {"error":"not_signed_in"}` rather than an HTML page, so client fetches fail cleanly. The legacy `BASIC_AUTH_USER`/`BASIC_AUTH_PASS` names still work. This app exposes live portfolio data — don't skip this.
+
+Two sign-outs exist and they're different: **Sign out of Falcon** (profile menu) ends the app session; **Log out** disconnects Kite but keeps you in the app.
 
 **Why the token store is local-only:** `lib/tokenStore.ts` caches the access token on disk so the MCP endpoint can share your session. On a shared/serverless host that would be a session-inheritance hole — `/tmp` outlives a request, so an anonymous visitor hitting a warm instance after you logged in would inherit your Kite session. The store therefore disables itself unless the runtime is local. Override with `ALLOW_SHARED_TOKEN_STORE=true` **only** on a single-user box you own.
 

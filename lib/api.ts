@@ -40,3 +40,7 @@ export async function fetchSession(): Promise<SessionInfo> {
 export async function logout(): Promise<{ ok: boolean }> {
   return j(await fetch("/api/session", { method: "DELETE" }));
 }
+/** Sign out of the app itself (distinct from disconnecting Kite). */
+export async function signOutApp(): Promise<{ ok: boolean }> {
+  return j(await fetch("/api/login", { method: "DELETE" }));
+}
